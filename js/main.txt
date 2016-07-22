@@ -1,0 +1,74 @@
+//http://bl.ocks.org/zanarmstrong/b1c051113be144570881
+
+
+var margin = {top: 20, right: 20, bottom: 20, left: 20},
+    padding = {top: 60, right: 60, bottom: 60, left: 60},
+    outerWidth = 960,
+    outerHeight = 500,
+    innerWidth = outerWidth - margin.left - margin.right,
+    innerHeight = outerHeight - margin.top - margin.bottom,
+    width = innerWidth - padding.left - padding.right,
+    height = innerHeight - padding.top - padding.bottom;
+
+var x = d3.scaleIdentity()
+    .domain([0, width]);
+
+var y = d3.scaleIdentity()
+    .domain([0, height]);
+
+var xAxis = d3.axisBottom()
+    .scale(x)
+
+var yAxis = d3.axisRight()
+    .scale(y)
+
+var svg = d3.select("body").append("svg")
+    .attr("width", outerWidth)
+    .attr("height", outerHeight)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+svg.on("click", function(){
+  // ignore click if it just happened
+  updateDots(d3.mouse(this))
+})
+
+// Generate dataset of a few random points
+
+function get_random_location() {
+    return [d3.randomUniform(0,width)(),d3.randomUniform(0,height)()] 
+}
+
+var demand_data = _.map(d3.range(10), get_random_location)
+var demand_data = _.map(demand_data, function(d) {return {x:d[0], y:d[1], demand: d3.randomUniform(0,100)()}})
+
+var demand_colour_scale = d3.scaleOrdinal().domain(0,50,100).range(["#6AE817","#FFA200", "#B30409"])
+
+// var original_locations = _.map(d3.range(3), get_random_location)
+// 
+
+
+
+
+// Plot demand data
+svg.selectAll(".demand_data").data(demand_data)
+    .enter()
+    .append("circle")
+    .attr("r", 3)
+    .attr("cx", function(d) {return d.x})
+    .attr("cy", function(d) {return d.y})
+    .attr("fill", function(d) {return demand_colour_scale(d.demand)})
+
+//Function for voronoi
+var myVoronoi = d3.geom.voronoi()
+                .x(function(d) {
+                    return d[0];
+                })
+                .y(function(d) {
+                    return d[1];
+                })
+                .clipExtent([[0, 0], [width, height]])
+    
+
+    
