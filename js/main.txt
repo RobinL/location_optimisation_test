@@ -1,5 +1,7 @@
 //http://bl.ocks.org/zanarmstrong/b1c051113be144570881
-
+var jitter_start_size = 200
+var jitter_multi_when_previous_improved = 0.5;
+var jitter_multi_when_previous_worse = 0.7;
 
 var margin = {top: 20, right: 20, bottom: 20, left: 30},
     padding = {top: 20, right: 60, bottom: 60, left: 30},
@@ -96,7 +98,10 @@ function update_dots(point) {
 
     new_location = {
         point:point,
-        name: locations.length + 1
+        name: locations.length + 1,
+        previous_jitter: [0,0],
+        previous_loss_improve: false,
+        jitter_size: jitter_start_size
     }
 
     locations.push(new_location)
@@ -194,10 +199,11 @@ function draw_loss() {
 }
 
 function get_closest_point(point) {
-    locations = _.sortBy(locations, function(this_location) {
+
+    locations2 = _.sortBy(locations, function(this_location) {
        return get_distance(this_location.point, point.point)
     })
-    return locations[0]
+    return locations2[0]
 }
 
 function get_distance(p1, p2) {
@@ -219,6 +225,8 @@ function compute_loss() {
         return {this_point: d.point, closest_point:closest_point, distance:this_distance, demand:d.demand, loss:this_distance*d.demand}
     })
 
+    
+
     var total_loss = 0
     _.each(loss_data, function(d) {
         total_loss = total_loss + d.loss
@@ -231,53 +239,89 @@ function compute_loss() {
 var current_loss = null;
 
 $('#optimise').on('click', optimise_tick)
-
+$('#stop').on('click', function(d) {
+    clearTimeout(timer)
+})
 
 // For each point remember what a previous 'good' movement was
 // Move all points before recomputing loss
 
 function optimise_tick() {
-    var timer = setInterval(function() { optimise_locations() }, 0)
+     timer = setInterval(function() {optimise_locations() }, 0)
 }
+
+
 
 function optimise_locations() {
     // For each location, try a small movement and if it improves the loss function, do it
 
-    
-
-        
-
     if (!(current_loss)) {
-
         current_loss = compute_loss()
     }
-
-    locations_old = $.extend(true, {}, locations);
 
 
    for (var i = 0; i < locations.length; i++) {
 
-       locations[i].point[0] += d3.randomUniform(-2,2)();
-       locations[i].point[1] += d3.randomUniform(-2,2)();
+       var saved_location = [locations[i].point[0], locations[i].point[1]]
 
+       // if loss improved previousy
+       if (locations[i].previous_loss_improve) {
+            this_jitter = _.map(locations[i].previous_jitter, function(d) {return d*jitter_multi_when_previous_improved})
+       } else {
+      
+            locations[i].jitter_size = locations[i].jitter_size * jitter_multi_when_previous_worse;
+            
+
+            var js = locations[i].jitter_size
+            
+            //Ocasionally add large jitter just to check it doesn't make things better
+            if (d3.randomUniform()()>0.99) {
+                locations[i].jitter_size = jitter_start_size*d3.randomUniform()();
+                js = locations[i].jitter_size;
+            }
+
+            this_jitter = _.map([0,0], function(d) {return d3.randomUniform(-js,js)()})
+       }
+
+
+        //Modify the location of this point
+       locations[i].point[0] += this_jitter[0]
+       locations[i].point[1] += this_jitter[1]
+
+       locations.previous_jitter = this_jitter
+
+       //Recompute loss
        new_loss = compute_loss()
+
+       //If new loss is worse, undo 
+       if (new_loss.total_loss > current_loss.total_loss) {
+            locations[i].point = saved_location;
+            locations.jitter_size = locations.jitter_size * 0.7;
+            locations.previous_loss_improve = false
+
+
+
+       } else {
+        current_loss = new_loss
+
+       }
+
 
    }
 
-   if (new_loss.total_loss > current_loss.total_loss) {
+   
 
-        for (var i = 0; i < locations.length; i++) {
-            locations[i].point = locations_old[i].point
-        }
-
-
-    } else {
-        current_loss = new_loss
-    }
+   // if (new_loss.total_loss <= current_loss.total_loss) {
+        
+   //  }
 
    redraw_voronoi()
+
+   
+
 
 
 
    
+
 }
