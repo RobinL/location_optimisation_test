@@ -47,11 +47,14 @@ function get_random_location() {
 }
 
 var demand_data = _.map(d3.range(500), get_random_location)
-var demand_data = _.map(demand_data, function(d) {return {point:d, demand: d3.randomUniform(0,100)()}})
+var demand_data = _.map(demand_data, function(d) {return {point:d, demand: d3.randomUniform(0,100)() + d[0]/2}})
 
-var demand_colour_scale = d3.scaleLinear().domain([0,50,100]).range(["#6AE817","#FFA200", "#B30409"])
+var min_demand = _.min(demand_data, function(d) {return d.demand})["demand"]
+var max_demand = _.max(demand_data, function(d) {return d.demand})["demand"]
+var mid = (min_demand+max_demand)/2
 
-// var original_locations = _.map(d3.range(3), get_random_location)
+var demand_colour_scale = d3.scaleLinear().domain([min_demand,mid,max_demand]).range(["#6AE817","#FFA200", "#B30409"])
+
 
 // Plot demand data
 demand_data_circles_group.selectAll(".demand_data").data(demand_data)
@@ -152,64 +155,49 @@ function redraw_voronoi() {
         })
         .attr("cy", function(d) {return d.data.point[1]})
 
-    compute_loss()
+    draw_loss()
 
 }
 
-function compute_loss() {
+function draw_loss() {
     //Iterate through the demand_data.
     //For each point find the closest location
     //And compute the distance
     //And draw line to closest 
 
-    var lines_data = _.map(demand_data, function(d) {
-        var closest_point = get_closest_point(d)["point"]
-
-        var this_distance = get_distance(d.point, closest_point)
-
-        return {this_point: d.point, closest_point:closest_point, distance:this_distance}
-    })
+    var loss_dict = compute_loss()
+    var loss_data = loss_dict.loss_data
+    var total_loss = loss_dict.total_loss
 
     // Get min and max distance
-    var min_distance = _.min(lines_data, function(d) {return d.distance})["distance"]
-    var max_distance = _.max(lines_data, function(d) {return d.distance})["distance"]
+    var min_loss = _.min(loss_data, function(d) {return d.loss})["loss"]
+    var max_loss = _.max(loss_data, function(d) {return d.loss})["loss"]
+    var mid = (min_loss+max_loss)/2
 
-    var distance_line_colour_scale = d3.scaleLinear().domain([min_distance, max_distance]).range([ "#04CE4E","#CE043A"])
+    var loss_line_colour_scale = d3.scaleLinear().domain([min_loss,mid, max_loss]).range([ "#04CE4E","#CE8E00","#CE043A"])
 
 
-    demand_data_lines_group.selectAll(".demand_data_lines").data(lines_data)
+    demand_data_lines_group.selectAll(".demand_data_lines").data(loss_data)
         .attr("x1", function(d) {return d.this_point[0]})
         .attr("y1", function(d) {return d.this_point[1]})
         .attr("x2", function(d) {return d.closest_point[0]})
         .attr("y2", function(d) {return d.closest_point[1]})
         .style("stroke", function(d) {
-            return distance_line_colour_scale(d.distance)})
+            return loss_line_colour_scale(d.loss)})
         .style("stroke-width",1)
 
-    var distances = _.map(lines_data, function(d) {
-        return get_distance(d.this_point, d.closest_point)
-    })
 
-    var total_distance = _.reduce(distances, function(a,b) {return a+b})
+    
 
-
-
-    locations_group.select(".loss_text").text("Total loss: " + d3.format(",.0f")(total_distance))
-
-
-
-
+    locations_group.select(".loss_text").text("Total loss: " + d3.format(",.0f")(total_loss))
 
 }
-
-
 
 function get_closest_point(point) {
     locations = _.sortBy(locations, function(this_location) {
        return get_distance(this_location.point, point.point)
     })
     return locations[0]
-
 }
 
 function get_distance(p1, p2) {
@@ -220,4 +208,76 @@ function get_distance(p1, p2) {
 
 function point_to_plot_location(point) {
     return [point[0] + margin]
+}
+
+
+function compute_loss() {
+
+    var loss_data = _.map(demand_data, function(d) {
+        var closest_point = get_closest_point(d)["point"]
+        var this_distance = get_distance(d.point, closest_point)
+        return {this_point: d.point, closest_point:closest_point, distance:this_distance, demand:d.demand, loss:this_distance*d.demand}
+    })
+
+    var total_loss = 0
+    _.each(loss_data, function(d) {
+        total_loss = total_loss + d.loss
+    })
+
+    return {loss_data: loss_data, total_loss:total_loss}
+
+}
+
+var current_loss = null;
+
+$('#optimise').on('click', optimise_tick)
+
+
+// For each point remember what a previous 'good' movement was
+// Move all points before recomputing loss
+
+function optimise_tick() {
+    var timer = setInterval(function() { optimise_locations() }, 0)
+}
+
+function optimise_locations() {
+    // For each location, try a small movement and if it improves the loss function, do it
+
+    
+
+        
+
+    if (!(current_loss)) {
+
+        current_loss = compute_loss()
+    }
+
+    locations_old = $.extend(true, {}, locations);
+
+
+   for (var i = 0; i < locations.length; i++) {
+
+       locations[i].point[0] += d3.randomUniform(-2,2)();
+       locations[i].point[1] += d3.randomUniform(-2,2)();
+
+       new_loss = compute_loss()
+
+   }
+
+   if (new_loss.total_loss > current_loss.total_loss) {
+
+        for (var i = 0; i < locations.length; i++) {
+            locations[i].point = locations_old[i].point
+        }
+
+
+    } else {
+        current_loss = new_loss
+    }
+
+   redraw_voronoi()
+
+
+
+   
 }
